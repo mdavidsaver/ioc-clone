@@ -12,7 +12,7 @@ from cothread.catools import caget
 
 def getargs():
     from argparse import ArgumentParser, FileType
-    P = ArgumentParser()
+    P = ArgumentParser(description="Capture a snapshot of a list of PVs as a runnable .db file.")
     P.add_argument('pvlist', type=FileType('r'), help='input PV name list')
     P.add_argument('db', help='output .db file')
     P.add_argument('-t','--timeout',default=5.0,type=float)
