@@ -32,8 +32,8 @@ def main(args):
     for val in caget([rec+'.RTYP' for rec in records], timeout=args.timeout, throw=False):
         rec, fld = val.name.split('.',1)
 
-        if not val.ok:
-            print('# No record',rec)
+        if not val.ok or val in {'aai', 'aao', 'waveform'}:
+            print('# skip record',rec)
             del records[rec]
             continue
 
@@ -44,15 +44,16 @@ def main(args):
         flds = records[rec]
 
         if val in ('bi', 'bo'):
-            flds |= {'ZNAM', 'ONAM', 'ZSV', 'OSV'}
+            flds |= {'RVAL', 'ZNAM', 'ONAM', 'ZSV', 'OSV'}
 
         elif val in ('mbbi', 'mbbo'):
+            flds |= {'RVAL'}
             for pref in ['ZR', 'ON', 'TW', 'TH', 'FR', 'FV', 'SX', 'SV', 'EI', 'NI', 'TE', 'EL', 'TV', 'TT', 'FT', 'FF']:
                 for suf in ['ST','SV','VL']:
                     flds.add(pref+suf)
 
         elif val in ('ai', 'ao'):
-            flds |= {'PREC'}
+            flds |= {'RVAL', 'PREC'}
 
         if val in ('longin', 'longout', 'ai', 'ao'):
             flds |= {'EGU', 'LOPR', 'HOPR', 'LOLO', 'LOW', 'HIGH', 'HIHI', 'LLSV', 'LSV', 'HSV', 'HHSV'}
@@ -66,16 +67,25 @@ def main(args):
         rec, fld = val.name.split('.',1)
         if val.ok:
             values[rec][fld] = val
+        else:
+            print("# missing", val.name)
 
     # write out
     with open(args.db+'.tmp', 'w') as F:
         for rec, flds in records.items():
+            rtyp = rtypes[rec]
             vals = values[rec]
-            F.write('record(%s, "%s") {\n'%(rtypes[rec], rec))
+            F.write('record(%s, "%s") {\n'%(rtyp, rec))
+            # ensure UDF cleared and valid timestamp
+            F.write('    field(PINI, "YES")\n')
 
             for fld, val in vals.items():
                 if fld in ('RTYP',):
                     continue
+                elif fld=='RVAL':
+                    # RVAL is epicsUInt32, which is promoted to double by CA,
+                    # but field can't be initialized from double
+                    val = int(val)
                 F.write('    field(%s, "%s")\n'%(fld, val))
 
             F.write('}\n')
