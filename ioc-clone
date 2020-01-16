@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+
+import os
+from collections import defaultdict
+
+try:
+    import epicscorelibs.path.cothread
+except ImportError:
+    pass
+
+from cothread.catools import caget
+
+def getargs():
+    from argparse import ArgumentParser, FileType
+    P = ArgumentParser()
+    P.add_argument('pvlist', type=FileType('r'), help='input PV name list')
+    P.add_argument('db', help='output .db file')
+    P.add_argument('-t','--timeout',default=5.0,type=float)
+    return P
+
+def main(args):
+    records = defaultdict(set)
+    rtypes = {}
+    # build list of PVs to fetch
+    for line in args.pvlist:
+        line = line.strip()
+        if line and line[0]!='#':
+            rec, _dot, fld = line.partition('.')
+            records[rec].add(fld or 'VAL')
+
+    # inspect record type and intuit extra fields
+    for val in caget([rec+'.RTYP' for rec in records], timeout=args.timeout, throw=False):
+        rec, fld = val.name.split('.',1)
+
+        if not val.ok:
+            print('# No record',rec)
+            del records[rec]
+            continue
+
+        elif val not in {'ai', 'ao', 'bi', 'bo', 'mbbi', 'mbbo', 'longout', 'longin'}:
+            print('# Unsupported record type', val)
+
+        rtypes[rec] = val
+        flds = records[rec]
+
+        if val in ('bi', 'bo'):
+            flds |= {'ZNAM', 'ONAM', 'ZSV', 'OSV'}
+
+        elif val in ('mbbi', 'mbbo'):
+            for pref in ['ZR', 'ON', 'TW', 'TH', 'FR', 'FV', 'SX', 'SV', 'EI', 'NI', 'TE', 'EL', 'TV', 'TT', 'FT', 'FF']:
+                for suf in ['ST','SV','VL']:
+                    flds.add(pref+suf)
+
+        elif val in ('ai', 'ao'):
+            flds |= {'PREC'}
+
+        if val in ('longin', 'longout', 'ai', 'ao'):
+            flds |= {'EGU', 'LOPR', 'HOPR', 'LOLO', 'LOW', 'HIGH', 'HIHI', 'LLSV', 'LSV', 'HSV', 'HHSV'}
+
+        if val in ('ao', 'longout'):
+            flds |= {'DRVL', 'DRVH'}
+
+    # fetch
+    values = defaultdict(dict)
+    for val in caget(['%s.%s'%(rec,fld) for rec, flds in records.items() for fld in flds], timeout=args.timeout, throw=False):
+        rec, fld = val.name.split('.',1)
+        if val.ok:
+            values[rec][fld] = val
+
+    # write out
+    with open(args.db+'.tmp', 'w') as F:
+        for rec, flds in records.items():
+            vals = values[rec]
+            F.write('record(%s, "%s") {\n'%(rtypes[rec], rec))
+
+            for fld, val in vals.items():
+                if fld in ('RTYP',):
+                    continue
+                F.write('    field(%s, "%s")\n'%(fld, val))
+
+            F.write('}\n')
+
+    os.rename(args.db+'.tmp', args.db)
+
+if __name__=='__main__':
+    main(getargs().parse_args())
