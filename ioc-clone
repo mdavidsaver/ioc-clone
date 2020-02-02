@@ -37,7 +37,7 @@ def main(args):
             del records[rec]
             continue
 
-        elif val not in {'ai', 'ao', 'bi', 'bo', 'mbbi', 'mbbo', 'longout', 'longin'}:
+        elif val not in {'ai', 'ao', 'bi', 'bo', 'mbbi', 'mbbo', 'longout', 'longin', 'stringout', 'stringin'}:
             print('# Unsupported record type', val)
 
         rtypes[rec] = val
