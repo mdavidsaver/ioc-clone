@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+from math import fmod
 from collections import defaultdict
 
 try:
@@ -82,8 +83,8 @@ def main(args):
             for fld, val in vals.items():
                 if fld in ('RTYP',):
                     continue
-                elif fld=='RVAL':
-                    # RVAL is epicsUInt32, which is promoted to double by CA,
+                elif isinstance(val, float) and fmod(val, 1.0)==0:
+                    # may be epicsUInt32 or wider integer field promoted to double by CA
                     # but field can't be initialized from double
                     val = int(val)
                 F.write('    field(%s, "%s")\n'%(fld, val))
